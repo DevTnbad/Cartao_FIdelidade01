@@ -2,6 +2,8 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const Database = require('./database');
 const path = require('path');
+require('dotenv').config(); // Adiciona o dotenv
+
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -15,11 +17,11 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Inicializa o banco de dados
-const db = new Database('fidelidade.db', process.env.SQLITE_KEY || 'x7k9m2p8q3w5e4r6t2y1u0i9o8p7a6s5');
+// Inicializa o banco de dados com a chave do .env
+const db = new Database('fidelidade.db', process.env.SQLITE_KEY);
 
-// Senha do lojista (hash gerado para "admin123")
-const SENHA_LOJISTA_HASH = '$2b$10$RrMxnzq.BYKAfrN9zVRZ0eTrc2vO8CvkRLxXN4G9a9S7VTDlYwnPq';
+// Senha do lojista (hash para "admin123", substitua pelo seu hash gerado)
+const SENHA_LOJISTA_HASH = '$2b$10$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
 
 // Função para validar e-mail ou telefone
 function validarIdentificador(id) {
@@ -109,6 +111,6 @@ app.post('/resgatar-recompensa', async (req, res) => {
 });
 
 // Inicia o servidor
-app.listen(port, () => {
+app.listen(port, '0.0.0.0', () => {
   console.log(`Servidor rodando na porta ${port}`);
 });

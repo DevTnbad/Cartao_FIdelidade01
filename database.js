@@ -1,7 +1,7 @@
 const sqlite3 = require('better-sqlite3');
 
 class Database {
-  constructor(dbPath, encryptionKey) {
+  constructor(dbPath = process.env.DB_PATH || 'fidelidade.db', encryptionKey = process.env.SQLITE_KEY) {
     console.log('Inicializando banco de dados:', dbPath);
     this.db = new sqlite3(dbPath);
     this.db.pragma(`key = '${encryptionKey}'`);
