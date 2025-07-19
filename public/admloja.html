@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cartão Fidelidade - Lojista</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.png">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #f0f4f8, #d9e2ec);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      padding: 2rem;
+      border-radius: 15px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+    }
+
+    h1 {
+      color: #1a3c6d;
+      font-size: 1.8rem;
+      margin-bottom: 1rem;
+    }
+
+    h2 {
+      color: #1a3c6d;
+      font-size: 1.2rem;
+      margin: 1.5rem 0 1rem;
+    }
+
+    .form-group {
+      margin-bottom: 1.2rem;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    input[type="number"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+    input[type="text"]:focus,
+    input[type="password"]:focus,
+    input[type="number"]:focus {
+      outline: none;
+      border-color: #1a3c6d;
+      box-shadow: 0 0 8px rgba(26, 60, 109, 0.2);
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background: #1a3c6d;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.2s;
+    }
+
+    button:hover {
+      background: #15325b;
+      transform: translateY(-2px);
+    }
+
+    #resultadoLojista {
+      margin-top: 1.5rem;
+      font-size: 1rem;
+      color: #333;
+      min-height: 24px;
+    }
+
+    @media (max-width: 500px) {
+      .container {
+        padding: 1.5rem;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      h2 {
+        font-size: 1.1rem;
+      }
+
+      input[type="text"],
+      input[type="password"],
+      input[type="number"],
+      button {
+        padding: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Cartão Fidelidade - Lojista</h1>
+    
+    <h2>Adicionar Pontos</h2>
+    <div class="form-group">
+      <input type="password" id="senha" placeholder="Senha do Lojista" required>
+    </div>
+    <div class="form-group">
+      <input type="text" id="clienteIdAdicionar" placeholder="E-mail ou Telefone" required>
+    </div>
+    <div class="form-group">
+      <input type="number" id="pontos" placeholder="Quantidade de Pontos" min="1" max="100" required>
+    </div>
+    <button onclick="adicionarPontos()">Adicionar Pontos</button>
+
+    <h2>Resgatar Recompensa</h2>
+    <div class="form-group">
+      <input type="password" id="senhaResgatar" placeholder="Senha do Lojista" required>
+    </div>
+    <div class="form-group">
+      <input type="text" id="clienteIdResgatar" placeholder="E-mail ou Telefone" required>
+    </div>
+    <button onclick="resgatarRecompensa()">Resgatar Recompensa</button>
+    
+    <div id="resultadoLojista"></div>
+  </div>
+
+  <script>
+    async function adicionarPontos() {
+      const senha = document.getElementById('senha').value;
+      const clienteId = document.getElementById('clienteIdAdicionar').value;
+      const pontos = parseInt(document.getElementById('pontos').value);
+      const resultado = document.getElementById('resultadoLojista');
+
+      if (!senha || !clienteId || !pontos) {
+        resultado.innerHTML = 'Por favor, preencha todos os campos.';
+        return;
+      }
+
+      resultado.innerHTML = 'Carregando...';
+      try {
+        const response = await fetch('/adicionar-pontos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ senha, clienteId, pontos })
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          resultado.innerHTML = data.message;
+        } else {
+          resultado.innerHTML = data.error || 'Erro ao adicionar pontos.';
+        }
+      } catch (error) {
+        resultado.innerHTML = 'Erro ao conectar com o servidor.';
+        console.error('Erro:', error);
+      }
+    }
+
+    async function resgatarRecompensa() {
+      const senha = document.getElementById('senhaResgatar').value;
+      const clienteId = document.getElementById('clienteIdResgatar').value;
+      const resultado = document.getElementById('resultadoLojista');
+
+      if (!senha || !clienteId) {
+        resultado.innerHTML = 'Por favor, preencha todos os campos.';
+        return;
+      }
+
+      resultado.innerHTML = 'Carregando...';
+      try {
+        const response = await fetch('/resgatar-recompensa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ senha, clienteId })
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          resultado.innerHTML = data.message;
+        } else {
+          resultado.innerHTML = data.error || 'Erro ao resgatar recompensa.';
+        }
+      } catch (error) {
+        resultado.innerHTML = 'Erro ao conectar com o servidor.';
+        console.error('Erro:', error);
+      }
+    }
+  </script>
+</body>
+</html>

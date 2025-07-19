@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cartão Fidelidade - Consultar Pontos</title>
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" href="/icon.png">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Roboto', sans-serif; background: linear-gradient(135deg, #f0f4f8, #d9e2ec); min-height: 100vh; }
+    .container { max-width: 400px; margin: 80px auto 20px; padding: 20px; background: white; border-radius: 15px; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); }
+    .navbar { position: fixed; top: 0; width: 100%; background: #1a3c6d; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; z-index: 1000; }
+    .navbar a { color: white; text-decoration: none; margin: 0 15px; font-weight: 500; transition: color 0.3s; }
+    .navbar a:hover { color: #4CAF50; }
+    .navbar .home { font-size: 1.2rem; }
+    h1 { color: #1a3c6d; text-align: center; margin-bottom: 20px; }
+    .form-group { margin-bottom: 15px; }
+    input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 1rem; transition: border-color 0.3s, box-shadow 0.3s; }
+    input:focus { outline: none; border-color: #1a3c6d; box-shadow: 0 0 8px rgba(26, 60, 109, 0.2); }
+    input:invalid { border-color: #ff4444; }
+    .consentimento { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; font-size: 0.9rem; color: #333; }
+    button { width: 100%; padding: 12px; background: #4CAF50; color: white; border: none; border-radius: 8px; font-size: 1rem; cursor: pointer; transition: background 0.3s, transform 0.2s; }
+    button:hover { background: #45a049; transform: translateY(-2px); }
+    #resultadoPontos { margin-top: 20px; text-align: center; color: #333; min-height: 24px; }
+    @media (max-width: 600px) { .container { margin-top: 100px; } .navbar { flex-direction: column; padding: 10px; } .navbar a { margin: 5px 0; } }
+  </style>
+</head>
+<body>
+  <div class="navbar">
+    <a href="/" class="home">🏠 Lock Home</a>
+    <div>
+      <a href="/cadastro">Cadastro</a>
+      <a href="/registros">Registros</a>
+      <a href="/consultar-pontos">Pontos</a>
+    </div>
+  </div>
+  <div class="container">
+    <h1>Consultar Pontos</h1>
+    <div class="form-group">
+      <input type="email" id="email" placeholder="E-mail" required>
+    </div>
+    <div class="consentimento">
+      <input type="checkbox" id="consentimento" required>
+      <label for="consentimento">Concordo com o uso dos meus dados para verificar pontos.</label>
+    </div>
+    <button onclick="consultarPontos()">Consultar Pontos</button>
+    <div id="resultadoPontos"></div>
+  </div>
+
+  <script>
+    async function consultarPontos() {
+      const email = document.getElementById('email').value;
+      const consentimento = document.getElementById('consentimento').checked;
+      const resultado = document.getElementById('resultadoPontos');
+
+      if (!email || !consentimento) {
+        resultado.innerHTML = 'Por favor, preencha todos os campos e aceite o consentimento.';
+        return;
+      }
+
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        resultado.innerHTML = 'Por favor, insira um e-mail válido.';
+        return;
+      }
+
+      resultado.innerHTML = 'Carregando...';
+      try {
+        const response = await fetch('/consultar-pontos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, consentimento })
+        });
+        const data = await response.json();
+
+        if (response.ok) {
+          resultado.innerHTML = `Você tem ${data.pontos} pontos para o e-mail ${data.email}.`;
+        } else if (data.error === 'E-mail não cadastrado') {
+          await fetch('/consultar-pontos', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, consentimento, registrarConsulta: true })
+          });
+          resultado.innerHTML = 'E-mail não cadastrado. Foi registrado para consulta futura.';
+        } else {
+          resultado.innerHTML = data.error || 'Erro ao consultar pontos.';
+        }
+      } catch (error) {
+        resultado.innerHTML = 'Erro ao conectar com o servidor.';
+        console.error('Erro:', error);
+      }
+    }
+  </script>
+</body>
+</html>

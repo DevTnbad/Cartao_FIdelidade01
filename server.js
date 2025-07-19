@@ -2,115 +2,213 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const Database = require('./database');
 const path = require('path');
-require('dotenv').config(); // Adiciona o dotenv
+const cookieParser = require('cookie-parser');
+require('dotenv').config();
 
 const app = express();
 const port = process.env.PORT || 3000;
+const SENHA_LOJISTA_HASH = process.env.SENHA_LOJISTA_HASH || '$2b$10$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
 
-// Middleware para parsing de JSON e servir arquivos estáticos
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Log para verificar se a rota raiz está sendo acessada
+// Middleware de autenticação
+const authenticate = async (req, res, next) => {
+  const { senha } = req.body || req.query;
+  const isAuthenticated = req.cookies.authenticated;
+
+  console.log('Verificando autenticação - Senha:', senha, 'Cookie:', isAuthenticated, 'Método:', req.method, 'URL:', req.url);
+
+  if (!isAuthenticated && !senha) {
+    console.log('Nenhuma senha ou cookie de autenticação fornecidos');
+    if (req.method === 'GET') {
+      console.log('Redirecionando para /login');
+      return res.redirect('/login');
+    } else {
+      console.log('Retornando erro 401 para requisição não GET');
+      return res.status(401).json({ error: 'Autenticação necessária. Faça login.' });
+    }
+  }
+
+  if (senha) {
+    const isSenhaValida = await bcrypt.compare(senha, SENHA_LOJISTA_HASH);
+    if (!isSenhaValida) {
+      console.log('Senha incorreta fornecida:', senha, 'Hash comparado:', SENHA_LOJISTA_HASH);
+      return res.status(401).json({ error: 'Senha incorreta.' });
+    }
+    console.log('Autenticação bem-sucedida com senha:', senha);
+    res.cookie('authenticated', 'true', { httpOnly: true }); // Removido maxAge, agora é sessão
+  } else if (isAuthenticated) {
+    console.log('Autenticação bem-sucedida via cookie');
+  }
+
+  next();
+};
+
+// Rota raiz com redirecionamento forçado
 app.get('/', (req, res) => {
-  console.log('Servindo index.html');
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  console.log('Acessando / - Redirecionando para /login');
+  res.redirect('/login');
 });
 
-// Inicializa o banco de dados com a chave do .env
-const db = new Database('fidelidade.db', process.env.SQLITE_KEY);
-
-// Senha do lojista (hash para "admin123", substitua pelo seu hash gerado)
-const SENHA_LOJISTA_HASH = '$2b$10$xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx';
-
-// Função para validar e-mail ou telefone
-function validarIdentificador(id) {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  const telefoneRegex = /^\+?\d{10,15}$/;
-  return emailRegex.test(id) || telefoneRegex.test(id);
-}
-
-// Rota para verificar pontos do cliente
-app.post('/verificar-pontos', async (req, res) => {
-  const { clienteId, consentimento } = req.body;
-  console.log('Requisição para /verificar-pontos:', { clienteId, consentimento });
-
-  if (!consentimento) {
-    return res.status(400).json({ error: 'Você deve concordar com o uso dos dados.' });
-  }
-
-  if (!validarIdentificador(clienteId)) {
-    return res.status(400).json({ error: 'Por favor, insira um e-mail ou telefone válido.' });
-  }
-
-  try {
-    const pontos = await db.getPontos(clienteId);
-    res.json({ pontos });
-  } catch (error) {
-    console.error('Erro ao verificar pontos:', error);
-    res.status(500).json({ error: 'Erro ao verificar pontos.' });
-  }
+// Aplicar authenticate a outras rotas
+app.use((req, res, next) => {
+  if (req.path === '/login' || req.path === '/consultar-pontos') return next();
+  authenticate(req, res, next);
 });
 
-// Rota para adicionar pontos
-app.post('/adicionar-pontos', async (req, res) => {
-  const { senha, clienteId, pontos } = req.body;
-  console.log('Requisição para /adicionar-pontos:', { clienteId, pontos });
+app.get('/login', (req, res) => {
+  console.log('Servindo login.html');
+  res.clearCookie('authenticated');
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
 
+app.get('/cadastro', (req, res) => {
+  console.log('Servindo cadastro.html');
+  res.sendFile(path.join(__dirname, 'public', 'cadastro.html'));
+});
+
+app.get('/registros', (req, res) => {
+  console.log('Servindo registros.html');
+  res.sendFile(path.join(__dirname, 'public', 'registros.html'));
+});
+
+app.get('/consultar-pontos', (req, res) => {
+  console.log('Servindo consultar-pontos.html');
+  res.sendFile(path.join(__dirname, 'public', 'consultar-pontos.html'));
+});
+
+const db = new Database(process.env.DB_PATH, process.env.SQLITE_KEY);
+
+app.post('/login', async (req, res) => {
+  const { senha } = req.body;
+  console.log('Tentativa de login com senha recebida:', senha);
+  console.log('Hash de senha no servidor:', SENHA_LOJISTA_HASH);
   const isSenhaValida = await bcrypt.compare(senha, SENHA_LOJISTA_HASH);
-  if (!isSenhaValida) {
-    console.log('Senha incorreta fornecida');
-    return res.status(401).json({ error: 'Senha incorreta.' });
-  }
-
-  if (!validarIdentificador(clienteId)) {
-    return res.status(400).json({ error: 'Por favor, insira um e-mail ou telefone válido.' });
-  }
-
-  if (isNaN(pontos) || pontos < 1 || pontos > 100) {
-    return res.status(400).json({ error: 'Por favor, insira uma quantidade de pontos válida (1-100).' });
-  }
-
-  try {
-    const novosPontos = await db.addPontos(clienteId, pontos);
-    res.json({ message: `Adicionado ${pontos} pontos. Total: ${novosPontos} pontos.` });
-  } catch (error) {
-    console.error('Erro ao adicionar pontos:', error);
-    res.status(500).json({ error: 'Erro ao adicionar pontos.' });
+  if (isSenhaValida) {
+    console.log('Login bem-sucedido');
+    res.cookie('authenticated', 'true', { httpOnly: true });
+    res.json({ message: 'Login bem-sucedido', redirect: '/cadastro' });
+  } else {
+    console.log('Senha incorreta');
+    res.status(401).json({ error: 'Senha incorreta.' });
   }
 });
 
-// Rota para resgatar recompensa
-app.post('/resgatar-recompensa', async (req, res) => {
-  const { senha, clienteId } = req.body;
-  console.log('Requisição para /resgatar-recompensa:', { clienteId });
-  const PONTOS_PARA_RECOMPENSA = 10;
+app.post('/cadastrar-procedimento', async (req, res) => {
+  const { senha, nome, email, telefone, procedimento, data, valor, pontos } = req.body;
+  console.log('Requisição para /cadastrar-procedimento:', { senha, nome, email, telefone, procedimento, data, valor, pontos });
 
-  const isSenhaValida = await bcrypt.compare(senha, SENHA_LOJISTA_HASH);
-  if (!isSenhaValida) {
-    console.log('Senha incorreta fornecida');
-    return res.status(401).json({ error: 'Senha incorreta.' });
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'Por favor, insira um e-mail válido.' });
+  }
+  if (!nome || !/^[A-Za-zÀ-ÿ0-9\s]{2,}$/.test(nome)) {
+    return res.status(400).json({ error: 'O nome deve conter pelo menos 2 caracteres e pode incluir letras, números e espaços.' });
+  }
+  if (telefone && !/^\d{8,15}$/.test(telefone)) {
+    return res.status(400).json({ error: 'Digite um telefone válido (8 a 15 dígitos).'});
+  }
+  if (!procedimento || !/^[A-Za-zÀ-ÿ0-9\s]{2,}$/.test(procedimento)) {
+    return res.status(400).json({ error: 'O procedimento deve conter pelo menos 2 caracteres e pode incluir letras, números e espaços.' });
+  }
+  if (!data || !/^\d{4}-\d{2}-\d{2}$/.test(data)) {
+    return res.status(400).json({ error: 'Por favor, insira uma data válida.' });
+  }
+  if (!valor || isNaN(valor) || parseFloat(valor) <= 0) {
+    return res.status(400).json({ error: 'Digite um valor válido.' });
+  }
+  if (pontos && (isNaN(pontos) || parseInt(pontos) < 0)) {
+    return res.status(400).json({ error: 'Digite um número inteiro positivo para pontos.' });
   }
 
-  if (!validarIdentificador(clienteId)) {
-    return res.status(400).json({ error: 'Por favor, insira um e-mail ou telefone válido.' });
+  if (!req.cookies.authenticated) {
+    const isSenhaValida = await bcrypt.compare(senha, SENHA_LOJISTA_HASH);
+    if (!isSenhaValida) {
+      return res.status(401).json({ error: 'Senha incorreta.' });
+    }
+    res.cookie('authenticated', 'true', { httpOnly: true });
   }
 
   try {
-    const pontos = await db.getPontos(clienteId);
-    if (pontos < PONTOS_PARA_RECOMPENSA) {
-      return res.status(400).json({ error: `Pontos insuficientes. Necessário: ${PONTOS_PARA_RECOMPENSA}, disponível: ${pontos}.` });
+    let procedimentoId = null;
+    const procCadastrado = db.getProcedimentosCadastrados().find(p => p.nome === procedimento);
+    let novoProcedimento = false;
+    if (procCadastrado) {
+      procedimentoId = procCadastrado.id;
+    } else {
+      db.addProcedimentoCadastrado(procedimento, parseFloat(valor) || 0, 0);
+      procedimentoId = db.getProcedimentosCadastrados().find(p => p.nome === procedimento).id;
+      novoProcedimento = true;
     }
 
-    const novosPontos = await db.resgatarPontos(clienteId, PONTOS_PARA_RECOMPENSA);
-    res.json({ message: `Recompensa resgatada! Pontos restantes: ${novosPontos}.` });
+    let novoCliente = false;
+    if (!db.checkClienteExists(email)) {
+      db.addCliente(email, nome, telefone);
+      novoCliente = true;
+    }
+
+    const finalPontos = pontos ? parseInt(pontos) : db.getProcedimentoCadastrado(procedimentoId).pontos_padrao;
+    db.addProcedimentoRealizado(email, procedimentoId, data, parseFloat(valor), finalPontos);
+    const novosPontos = await db.getPontos(email);
+
+    let message = `Procedimento cadastrado! Pontos totais: ${novosPontos}.`;
+    if (novoCliente) message += ' Novo e-mail cadastrado.';
+    if (novoProcedimento) message += ' Novo procedimento cadastrado.';
+    res.json({ message });
   } catch (error) {
-    console.error('Erro ao resgatar recompensa:', error);
-    res.status(500).json({ error: 'Erro ao resgatar recompensa.' });
+    console.error('Erro ao cadastrar procedimento:', error);
+    res.status(500).json({ error: 'Erro ao cadastrar procedimento: ' + error.message });
   }
 });
 
-// Inicia o servidor
+app.get('/listar-registros', async (req, res) => {
+  try {
+    const registros = await db.getProcedimentosRealizados();
+    res.json(registros);
+  } catch (error) {
+    console.error('Erro ao listar registros:', error);
+    res.status(500).json({ error: 'Erro ao listar registros: ' + error.message });
+  }
+});
+
+app.get('/listar-procedimentos-cadastrados', async (req, res) => {
+  try {
+    const procedimentos = await db.getProcedimentosCadastrados();
+    res.json(procedimentos);
+  } catch (error) {
+    console.error('Erro ao listar procedimentos cadastrados:', error);
+    res.status(500).json({ error: 'Erro ao listar procedimentos cadastrados: ' + error.message });
+  }
+});
+
+app.get('/listar-clientes', async (req, res) => {
+  try {
+    const clientes = await db.getClientes();
+    res.json(clientes);
+  } catch (error) {
+    console.error('Erro ao listar clientes:', error);
+    res.status(500).json({ error: 'Erro ao listar clientes: ' + error.message });
+  }
+});
+
+app.post('/consultar-pontos', async (req, res) => {
+  const { email } = req.body;
+  console.log('Requisição para /consultar-pontos:', { email });
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'Por favor, insira um e-mail válido.' });
+  }
+
+  try {
+    const pontos = await db.getPontos(email);
+    res.json({ pontos, email });
+  } catch (error) {
+    console.error('Erro ao consultar pontos:', error);
+    res.status(500).json({ error: 'Erro ao consultar pontos: ' + error.message });
+  }
+});
+
 app.listen(port, '0.0.0.0', () => {
   console.log(`Servidor rodando na porta ${port}`);
 });
