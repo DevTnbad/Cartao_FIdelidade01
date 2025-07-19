@@ -2,3 +2,4 @@ t/
 node_modules/
 fidelidade.db
 .env
+hash.js
